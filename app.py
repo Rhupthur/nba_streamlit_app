@@ -16,15 +16,16 @@ def to_excel(df):
 def load_data():
     df_r = pd.read_csv('data_clean_regulier.csv')
     df_p = pd.read_csv('data_clean_playoffs.csv')
+
+    # Harmoniser le nom de la colonne d'équipe
+    for df in (df_r, df_p):
+        if "Tm" in df.columns and "Team" not in df.columns:
+            df.rename(columns={"Tm": "Team"}, inplace=True)
+
     return df_r, df_p
 
 df_r, df_p = load_data()
 
-# harmonisation des noms d'équipes entre les deux datasets
-if "Team" in df_r.columns:
-    df_r = df_r.rename(columns={"Team": "Team"})
-if "Team" in df_p.columns:
-    df_p = df_p.rename(columns={"Team": "Team"})
 
 # ajouter une colonne pour indiquer la source des données
 df_r['Source'] = "Saison régulière"
@@ -49,6 +50,16 @@ elif choix_saison == "Playoffs":
     df = df_p.copy()
 else:
     df = pd.concat([df_r, df_p], ignore_index=True)
+    
+# Conversion des colonnes numériques (corrige les strings bizarres)
+numeric_cols = ["G", "PTS", "AST", "TRB", "STL", "BLK", "MP"]
+for col in numeric_cols:
+    if col in df.columns:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+# On enlève les lignes sans valeur de G (sinon le slider plante)
+if "G" in df.columns:
+    df = df.dropna(subset=["G"])
 
 
 # filtrage par équipe
@@ -58,15 +69,25 @@ if "Team" in df.columns:
     df = df[df["Team"].isin(equipes_selectionnees)]
 else:
     st.warning("La colonne 'Team' est absente du dataset chargé.")
-    
+    st.stop()
 
 # filtrer minimun de matches joués
 if "G" in df.columns:
+    if df.empty:
+        st.warning("Aucune donnée ne correspond à ces filtres.")
+        st.stop()
     min_G = int(df["G"].min())
     max_G = int(df["G"].max())
-    g_filtre = st.sidebar.slider("Nombre minimum de matches joués (G):", min_G, max_G, min_G)
+    g_filtre = st.sidebar.slider(
+        "Nombre minimum de matches joués (G):",
+        min_G,
+        max_G,
+        min_G
+    )
     df = df[df["G"] >= g_filtre]
-
+else:
+    st.error("La colonne 'G' est absente du dataset chargé.")
+    st.stop()
 
 # onglet 1: vue generale
 # onglet 2: top scoreurs
